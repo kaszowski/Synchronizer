@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <input type="file" accept="video/*" id="input-tag"/>
+    <hr>
+    <video id="video" controls>
+    </video>
+    <div>
+        <!--<button id="starter">Od początku</button>-->
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        var videoTag = document.querySelector("#video");
+        var inputTag = document.querySelector("#input-tag");
+        var button = document.getElementById("starter")
+
+        videoTag.addEventListener("pause", function(e){
+            socket.emit("change", {timestamp: e.target.currentTime, videoPlaying: !e.target.paused})
+        })
+        videoTag.addEventListener("play", function(e){ 
+            socket.emit("change", {timestamp: e.target.currentTime, videoPlaying: !e.target.paused})
+        })
+
+        socket.on("connect", () => {
+            console.log(socket.id);
+        });
+        socket.on("change", (arg)=>{
+            console.log(arg)
+            if(arg.videoPlaying) videoTag.play()
+            else videoTag.pause()
+            videoTag.currentTime = arg.timestamp.toString()
+        })
+
+        inputTag.addEventListener("change", function(e){
+            var URL = window.URL || window.webkitURL 
+            var fileURL = URL.createObjectURL(e.target.files[0])
+            videoTag.src = fileURL
+            videoTag.play()
+        })
+        button.addEventListener("click", function(e){
+            socket.emit("change", {timestamp: 0, videoPlaying: true})
+            videoTag.load()
+            videoTag.play()
+            videoTag.currentTime = "0"
+        })
+    </script>
+</body>
+</html>
