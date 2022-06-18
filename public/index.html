@@ -7,7 +7,8 @@
     <title>Document</title>
 </head>
 <body>
-    <input type="file" accept="video/*" id="input-tag"/>
+    <input type="file" accept="video/*" id="input-tag"/>Film<br/>
+    <input type="file" id="input-subs"/>Napisy<br/>
     <hr>
     <video id="video" controls>
     </video>
@@ -18,9 +19,65 @@
     <script>
         const socket = io();
         var videoTag = document.querySelector("#video");
-        var inputTag = document.querySelector("#input-tag");
-        var button = document.getElementById("starter")
-
+        var inputTag = document.getElementById("input-tag");
+        var inputSubs = document.getElementById("input-subs");
+        var button = document.getElementById("starter");
+        function srt2webvtt(data) {
+      // remove dos newlines
+      var srt = data.replace(/\r+/g, '');
+      // trim white space start and end
+      srt = srt.replace(/^\s+|\s+$/g, '');
+      // get cues
+      var cuelist = srt.split('\n\n');
+      var result = "";
+      if (cuelist.length > 0) {
+        result += "WEBVTT\n\n";
+        for (var i = 0; i < cuelist.length; i=i+1) {
+          result += convertSrtCue(cuelist[i]);
+        }
+      }
+      return result;
+    }
+    function convertSrtCue(caption) {
+      // remove all html tags for security reasons
+      //srt = srt.replace(/<[a-zA-Z\/][^>]*>/g, '');
+      var cue = "";
+      var s = caption.split(/\n/);
+      // concatenate muilt-line string separated in array into one
+      while (s.length > 3) {
+          for (var i = 3; i < s.length; i++) {
+              s[2] += "\n" + s[i]
+          }
+          s.splice(3, s.length - 3);
+      }
+      var line = 0;
+      // detect identifier
+      if (!s[0].match(/\d+:\d+:\d+/) && s[1].match(/\d+:\d+:\d+/)) {
+        cue += s[0].match(/\w+/) + "\n";
+        line += 1;
+      }
+      // get time strings
+      if (s[line].match(/\d+:\d+:\d+/)) {
+        // convert time string
+        var m = s[1].match(/(\d+):(\d+):(\d+)(?:,(\d+))?\s*--?>\s*(\d+):(\d+):(\d+)(?:,(\d+))?/);
+        if (m) {
+          cue += m[1]+":"+m[2]+":"+m[3]+"."+m[4]+" --> "
+                +m[5]+":"+m[6]+":"+m[7]+"."+m[8]+"\n";
+          line += 1;
+        } else {
+          // Unrecognized timestring
+          return "";
+        }
+      } else {
+        // file format error or comment lines
+        return "";
+      }
+      // get cue text
+      if (s[line]) {
+        cue += s[line] + "\n\n";
+      }
+      return cue;
+    }
         videoTag.addEventListener("pause", function(e){
             socket.emit("change", {timestamp: e.target.currentTime, videoPlaying: !e.target.paused})
         })
@@ -43,6 +100,28 @@
             var fileURL = URL.createObjectURL(e.target.files[0])
             videoTag.src = fileURL
             videoTag.play()
+        })
+        inputSubs.addEventListener("change", function(e){
+            var fr=new FileReader();
+            fr.onload=function(){
+                var vtt = srt2webvtt(fr.result);
+                console.log(vtt);
+                var vttBlob = new Blob([vtt], {
+                    type: 'text/plain'
+                });
+                //document.
+                track = document.createElement("track");
+                track.kind = "captions";
+                track.label = "Polish";
+                track.srclang = "pl";
+                track.addEventListener("load", function() {
+                    this.mode = "showing";
+                    video.textTracks[0].mode = "showing"; // thanks Firefox 
+                });
+                track.src = URL.createObjectURL(vttBlob);
+                videoTag.append(track);
+            }  
+            fr.readAsText(this.files[0]);
         })
         button.addEventListener("click", function(e){
             socket.emit("change", {timestamp: 0, videoPlaying: true})
